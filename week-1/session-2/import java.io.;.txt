@@ -1,0 +1,50 @@
+import java.io.*;
+import java.util.*;
+
+public class Solution {
+    static class Student {
+        int id;
+        String fname;
+        long cgpaScaled;
+
+        Student(int id, String fname, double cgpa) {
+            this.id = id;
+            this.fname = fname;
+            this.cgpaScaled = Math.round(cgpa * 100);
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line = br.readLine();
+        if (line == null || line.trim().isEmpty()) return;
+
+        int n = Integer.parseInt(line.trim());
+        List<Student> list = new ArrayList<>(n);
+
+        for (int i = 0; i < n; i++) {
+            StringTokenizer st = new StringTokenizer(br.readLine());
+            int id = Integer.parseInt(st.nextToken());
+            String fname = st.nextToken();
+            double cgpa = Double.parseDouble(st.nextToken());
+            
+            list.add(new Student(id, fname, cgpa));
+        }
+        list.sort((s1, s2) -> {
+            if (s1.cgpaScaled != s2.cgpaScaled) {
+                return Long.compare(s2.cgpaScaled, s1.cgpaScaled); 
+            }
+            int nameComp = s1.fname.compareTo(s2.fname);
+            if (nameComp != 0) {
+                return nameComp; 
+            }
+            return Integer.compare(s1.id, s2.id); 
+        });
+
+        StringBuilder sb = new StringBuilder();
+        for (Student s : list) {
+            sb.append(s.fname).append("\n");
+        }
+        System.out.print(sb);
+    }
+}
