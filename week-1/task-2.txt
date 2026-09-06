@@ -1,0 +1,67 @@
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Scanner;
+
+class Student {
+    private int id;
+    private String firstName;
+    private double cgpa;
+
+    public Student(int id, String firstName, double cgpa) {
+        this.id = id;
+        this.firstName = firstName;
+        this.cgpa = cgpa;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public double getCgpa() {
+        return cgpa;
+    }
+}
+
+public class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        int n = scanner.nextInt();
+
+        List<Student> studentList = new ArrayList<>();
+
+        for (int i = 0; i < n; i++) {
+            int id = scanner.nextInt();
+            String firstName = scanner.next();
+            double cgpa = scanner.nextDouble();
+
+            studentList.add(new Student(id, firstName, cgpa));
+        }
+
+        Collections.sort(studentList, new Comparator<Student>() {
+            @Override
+            public int compare(Student s1, Student s2) {
+                if (Double.compare(s2.getCgpa(), s1.getCgpa()) != 0) {
+                    return Double.compare(s2.getCgpa(), s1.getCgpa());
+                }
+                if (!s1.getFirstName().equals(s2.getFirstName())) {
+                    return s1.getFirstName().compareTo(s2.getFirstName());
+                }
+
+                return Integer.compare(s1.getId(), s2.getId());
+            }
+        });
+
+        // Print the first name of each sorted student
+        for (Student st : studentList) {
+            System.out.println(st.getFirstName());
+        }
+
+        scanner.close();
+    }
+}
