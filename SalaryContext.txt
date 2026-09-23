@@ -1,0 +1,68 @@
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+import java.util.function.Consumer;
+
+record Employee(String id, String name, BigDecimal base, BigDecimal bonus) {}
+
+record SalarySlip(String id, String name, BigDecimal gross, BigDecimal net, 
+                  Map<String, BigDecimal> items) {}
+
+class SalaryContext {
+    final Employee emp;
+    final Map<String, BigDecimal> items = new LinkedHashMap<>();
+    BigDecimal gross, net;
+
+    SalaryContext(Employee e) {
+        this.emp = e;
+        this.gross = e.base();
+        this.net = e.base();
+    }
+
+    void add(String label, BigDecimal amt) {
+        items.put("+" + label, amt.setScale(2, RoundingMode.HALF_UP));
+        gross = gross.add(amt);
+        net = net.add(amt);
+    }
+
+    void deduct(String label, BigDecimal amt) {
+        items.put("-" + label, amt.setScale(2, RoundingMode.HALF_UP));
+        net = net.subtract(amt);
+    }
+
+    SalarySlip build() {
+        return new SalarySlip(emp.id(), emp.name(), 
+            gross.setScale(2, RoundingMode.HALF_UP), 
+            net.setScale(2, RoundingMode.HALF_UP), 
+            Map.copyOf(items));
+    }
+}
+
+public class SalaryEngine {
+    private final List<Consumer<SalaryContext>> rules = new ArrayList<>();
+
+    public SalaryEngine addRule(Consumer<SalaryContext> rule) {
+        rules.add(rule);
+        return this;
+    }
+
+    public SalarySlip process(Employee emp) {
+        SalaryContext ctx = new SalaryContext(emp);
+        rules.forEach(r -> r.accept(ctx));
+        return ctx.build();
+    }
+
+    public static void main(String[] args) {
+        SalaryEngine engine = new SalaryEngine()
+            .addRule(c -> c.add("HRA", c.emp.base().multiply(BigDecimal.valueOf(0.15))))
+            .addRule(c -> { if (c.emp.bonus() != null) c.add("Bonus", c.emp.bonus()); })
+            .addRule(c -> c.deduct("PF", c.emp.base().multiply(BigDecimal.valueOf(0.06))))
+            .addRule(c -> c.deduct("Tax", c.gross.multiply(BigDecimal.valueOf(0.10))));
+
+        Employee emp = new Employee("E101", "Alex", new BigDecimal("5000"), new BigDecimal("500"));
+        SalarySlip slip = engine.process(emp);
+
+        System.out.printf("%s (%s)%nGross: $%.2f | Net: $%.2f%nBreakdown: %s%n",
+                slip.name(), slip.id(), slip.gross(), slip.net(), slip.items());
+    }
+}
