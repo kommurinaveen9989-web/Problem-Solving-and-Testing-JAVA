@@ -1,0 +1,95 @@
+import java.util.*;
+
+public class IntelligentDnaMatcher {
+
+    // IUPAC degenerate nucleotide bitmasks (A=1, C=2, G=4, T=8)
+    private static final Map<Character, Integer> IUPAC = Map.ofEntries(
+        Map.entry('A', 1), Map.entry('C', 2), Map.entry('G', 4), Map.entry('T', 8),
+        Map.entry('R', 1 | 4),         // Purine: A or G
+        Map.entry('Y', 2 | 8),         // Pyrimidine: C or T
+        Map.entry('S', 2 | 4),         // Strong: C or G
+        Map.entry('W', 1 | 8),         // Weak: A or T
+        Map.entry('K', 4 | 8),         // Keto: G or T
+        Map.entry('M', 1 | 2),         // Amino: A or C
+        Map.entry('B', 2 | 4 | 8),     // Not A
+        Map.entry('D', 1 | 4 | 8),     // Not C
+        Map.entry('H', 1 | 2 | 8),     // Not G
+        Map.entry('V', 1 | 2 | 4),     // Not T
+        Map.entry('N', 1 | 2 | 4 | 8)  // Any base
+    );
+
+    public record Match(int position, String matchedSeq, int mismatches, String strand) {}
+
+    // Find occurrences allowing up to maxMismatches, checks both Forward and Reverse Complement
+    public static List<Match> search(String sequence, String motif, int maxMismatches, boolean checkReverse) {
+        List<Match> results = new ArrayList<>();
+        sequence = sequence.toUpperCase();
+        motif = motif.toUpperCase();
+
+        scanStrand(sequence, motif, maxMismatches, "+", results);
+        if (checkReverse) {
+            String revComplement = reverseComplement(sequence);
+            List<Match> revMatches = new ArrayList<>();
+            scanStrand(revComplement, motif, maxMismatches, "-", revMatches);
+            // Map coordinates back to the forward 5' -> 3' reference coordinate system
+            for (Match m : revMatches) {
+                int originalPos = sequence.length() - m.position() - motif.length();
+                results.add(new Match(originalPos, m.matchedSeq(), m.mismatches(), "-"));
+            }
+        }
+        return results;
+    }
+
+    private static void scanStrand(String seq, String motif, int maxErr, String strand, List<Match> out) {
+        int n = seq.length(), m = motif.length();
+        int[] motifMasks = new int[m];
+        for (int i = 0; i < m; i++) motifMasks[i] = IUPAC.getOrDefault(motif.charAt(i), 0);
+
+        for (int i = 0; i <= n - m; i++) {
+            int errors = 0;
+            for (int j = 0; j < m; j++) {
+                int baseMask = IUPAC.getOrDefault(seq.charAt(i + j), 0);
+                // Bitwise overlap test: (base & pattern) == 0 means no compatible match
+                if ((baseMask & motifMasks[j]) == 0) {
+                    if (++errors > maxErr) break; // Early termination
+                }
+            }
+            if (errors <= maxErr) {
+                out.add(new Match(i, seq.substring(i, i + m), errors, strand));
+            }
+        }
+    }
+
+    public static String reverseComplement(String dna) {
+        StringBuilder sb = new StringBuilder(dna.length());
+        for (int i = dna.length() - 1; i >= 0; i--) {
+            sb.append(switch (dna.charAt(i)) {
+                case 'A' -> 'T';
+                case 'T' -> 'A';
+                case 'C' -> 'G';
+                case 'G' -> 'C';
+                default -> 'N';
+            });
+        }
+        return sb.toString();
+    }
+
+    public static void main(String[] args) {
+        // Target: Synthetic genomic region with EcoRI restriction site variation and TATA box
+        String genome = "CCGATATAAAGGCGAATTCGGCTAATTCGGCCCTATAAAGG";
+        
+        // 1. Degenerate motif match: Canonical TATA box -> "TATAWAAR" (W = A/T, R = A/G)
+        String tataBoxMotif = "TATAWAAR";
+        System.out.println("--- IUPAC Ambiguity Search: " + tataBoxMotif + " ---");
+        List<Match> tataMatches = search(genome, tataBoxMotif, 0, false);
+        tataMatches.forEach(m -> System.out.printf("Pos %2d [%s] Match: %s (Mismatches: %d)%n",
+                m.position(), m.strand(), m.matchedSeq(), m.mismatches()));
+
+        // 2. Fuzzy search with up to 1 mutation: EcoRI site "GAATTC"
+        String ecori = "GAATTC";
+        System.out.println("\n--- Fuzzy Search: " + ecori + " (max 1 mutation, both strands) ---");
+        List<Match> ecoMatches = search(genome, ecori, 1, true);
+        ecoMatches.forEach(m -> System.out.printf("Pos %2d [%s] Match: %s (Mismatches: %d)%n",
+                m.position(), m.strand(), m.matchedSeq(), m.mismatches()));
+    }
+}
