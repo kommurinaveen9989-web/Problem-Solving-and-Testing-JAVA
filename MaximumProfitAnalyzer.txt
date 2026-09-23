@@ -1,0 +1,57 @@
+import java.util.*;
+
+public class MaximumProfitAnalyzer {
+
+    record TradeResult(double maxProfit, int buyIndex, int sellIndex, String strategy) {}
+
+    // Case 1: Best Time to Buy and Sell Stock (At most 1 transaction)
+    public static TradeResult analyzeSingleTrade(double[] prices) {
+        if (prices == null || prices.length < 2) return new TradeResult(0, -1, -1, "Single Trade");
+
+        double minPrice = prices[0];
+        int minIdx = 0, bestBuy = 0, bestSell = 0;
+        double maxProfit = 0;
+
+        for (int i = 1; i < prices.length; i++) {
+            if (prices[i] - minPrice > maxProfit) {
+                maxProfit = prices[i] - minPrice;
+                bestBuy = minIdx;
+                bestSell = i;
+            }
+            if (prices[i] < minPrice) {
+                minPrice = prices[i];
+                minIdx = i;
+            }
+        }
+        return new TradeResult(maxProfit, bestBuy, bestSell, "Single Trade");
+    }
+
+    // Case 2: Unlimited Transactions with flat transaction fee (State Machine DP)
+    public static double analyzeMultiTradeWithFee(double[] prices, double fee) {
+        if (prices == null || prices.length < 2) return 0.0;
+
+        // hold: max profit when holding a stock; cash: max profit without holding a stock
+        double hold = -prices[0];
+        double cash = 0.0;
+
+        for (int i = 1; i < prices.length; i++) {
+            cash = Math.max(cash, hold + prices[i] - fee);
+            hold = Math.max(hold, cash - prices[i]);
+        }
+        return cash;
+    }
+
+    public static void main(String[] args) {
+        double[] prices = {100.0, 180.0, 260.0, 310.0, 40.0, 535.0, 695.0};
+        double flatFee = 5.0;
+
+        // 1. Single trade evaluation
+        TradeResult single = analyzeSingleTrade(prices);
+        System.out.printf("--- Single Trade ---%nBuy Day %d ($%.2f) -> Sell Day %d ($%.2f)%nMax Profit: $%.2f%n%n",
+                single.buyIndex(), prices[single.buyIndex()], single.sellIndex(), prices[single.sellIndex()], single.maxProfit());
+
+        // 2. Multi-trade evaluation
+        double multiProfit = analyzeMultiTradeWithFee(prices, flatFee);
+        System.out.printf("--- Multi-Trade (Fee: $%.2f) ---%nTotal Max Profit: $%.2f%n", flatFee, multiProfit);
+    }
+}
