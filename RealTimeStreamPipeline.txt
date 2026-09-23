@@ -1,0 +1,56 @@
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.*;
+
+record Event(String key, double value, Instant timestamp) {}
+
+public class RealTimeStreamPipeline {
+    private final BlockingQueue<Event> stream = new LinkedBlockingQueue<>();
+    private final Map<String, Deque<Event>> slidingWindows = new ConcurrentHashMap<>();
+    private final long windowMillis = 5_000; // 5-second tumbling/sliding window
+
+    // 1. Ingestion
+    public void ingest(Event e) { stream.offer(e); }
+
+    // 2. Real-time Sliding-Window Processor
+    public void start() {
+        Executors.newSingleThreadExecutor().submit(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                Event e = stream.take();
+                Instant cutoff = e.timestamp().minusMillis(windowMillis);
+
+                // Update state & evict stale events (out-of-window)
+                Deque<Event> window = slidingWindows.computeIfAbsent(e.key(), k -> new ArrayDeque<>());
+                window.addLast(e);
+                while (!window.isEmpty() && window.peekFirst().timestamp().isBefore(cutoff)) {
+                    window.pollFirst();
+                }
+
+                // Aggregate & Detect Anomaly
+                double avg = window.stream().mapToDouble(Event::value).average().orElse(0.0);
+                if (e.value() > avg * 1.5 && window.size() > 2) {
+                    System.out.printf("[ALERT] Spike on %s: Val=%.2f, 5s Avg=%.2f%n", e.key(), e.value(), avg);
+                } else {
+                    System.out.printf("[METRIC] %s: Current=%.2f, Rolling Avg=%.2f (Events: %d)%n", 
+                                      e.key(), e.value(), avg, window.size());
+                }
+            }
+        });
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        RealTimeStreamPipeline engine = new RealTimeStreamPipeline();
+        engine.start();
+
+        // Simulate streaming telemetry
+        String sensor = "sensor-cpu-1";
+        engine.ingest(new Event(sensor, 40.0, Instant.now()));
+        Thread.sleep(100);
+        engine.ingest(new Event(sensor, 42.0, Instant.now()));
+        Thread.sleep(100);
+        engine.ingest(new Event(sensor, 41.0, Instant.now()));
+        Thread.sleep(100);
+        engine.ingest(new Event(sensor, 95.0, Instant.now())); // Anomaly
+        Thread.sleep(500);
+    }
+}
